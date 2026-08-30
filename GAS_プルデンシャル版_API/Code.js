@@ -297,7 +297,8 @@ function sendOrderEmails(data, total, sameAsAbove, shipZip, shipAddress, shipNam
 
   var body = data.userName + " 様\n\nご注文ありがとうございます。\n\n" +
              "【ご注文商品】シャイニースタンプ（住所印／Shiny Printer S-844・22mm×58mm）\n" +
-             "【合計金額】" + total.toLocaleString() + "円（本体" + STAMP_PRICE.toLocaleString() + "円＋送料" + SHIPPING_FEE.toLocaleString() + "円・税込）\n\n" +
+             "【合計金額】" + total.toLocaleString() + "円（本体" + STAMP_PRICE.toLocaleString() + "円＋送料" + SHIPPING_FEE.toLocaleString() + "円・税込）\n" +
+             "【納期】ご注文確認後、7営業日以内に発送\n\n" +
              engraveDetails + shipDetails;
 
   body += paymentUrl
