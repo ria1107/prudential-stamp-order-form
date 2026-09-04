@@ -37,7 +37,7 @@ const SS_URL = 'https://docs.google.com/spreadsheets/d/' + SPREADSHEET_ID + '/ed
 const ORDER_SHEET_NAME = '注文台帳_スタンプ_プルデンシャル';
 const ORDER_SHEET_HEADERS = [
   '注文日時', '社名', '支店名', 'お名前', '郵便番号', '住所', '電話番号', 'FAX番号', '携帯電話番号', 'メールアドレス',
-  '配送先郵便番号', '配送先住所', 'お届け先氏名', '配送先電話番号', '合計金額(税込)'
+  '配送先郵便番号', '配送先住所', 'お届け先氏名', '配送先電話番号', '合計金額(税込)', '商品'
 ];
 
 // ===== Notion連携(注文後にDB_プロジェクト・DB_現金出納帳_F3へ自動記録) =====
@@ -70,11 +70,11 @@ function _notionApiRequest(path, payload) {
 
 // 注文をNotionのDB_プロジェクト(案件ページ)とDB_現金出納帳_F3(商品ごとの明細行)に記録する。
 // 失敗しても注文自体(メール送信・決済)には影響させない。呼び出し側でtry/catchすること。
-// (印鑑販売フォームの recordOrderToNotion_ と同じ実装パターン。案件名の接尾辞のみ変更)
-function recordOrderToNotion_(formData, lineItems, orderDate) {
+// (印鑑販売フォームの recordOrderToNotion_ と同じ実装パターン。案件名の接尾辞は選択された商品名)
+function recordOrderToNotion_(formData, lineItems, orderDate, product) {
   var dateStr = Utilities.formatDate(orderDate, 'Asia/Tokyo', 'yyMMdd');
   var isoDate = Utilities.formatDate(orderDate, 'Asia/Tokyo', 'yyyy-MM-dd');
-  var projectTitle = dateStr + '_' + formData.userName + '_シャイニースタンプ';
+  var projectTitle = dateStr + '_' + formData.userName + '_' + product.shortName;
 
   var projectPage = _notionApiRequest('pages', {
     parent: { type: 'data_source_id', data_source_id: NOTION_DB_PROJECT_DATASOURCE_ID },
@@ -112,13 +112,25 @@ function recordOrderToNotion_(formData, lineItems, orderDate) {
   });
 }
 
-// ▼商品価格設定(税込)。金額を変更する場合はここだけ書き換えればよい。
-// index.html側のJavaScript(STAMP_PRICE / SHIPPING_FEE)も表示用に同じ値を持っているので、
-// 金額を変える場合は両方を合わせて変更すること。
-const STAMP_PRICE = 4400; // シャイニースタンプ本体価格(税込)
+// ▼商品設定(価格は税込)。金額・商品を変更する場合はここだけ書き換えればよい。
+// index.html側のJavaScript(PRODUCTS / SHIPPING_FEE)も表示用に同じ値を持っているので、
+// 変更する場合は両方を合わせて変更すること。
+// 2026-09-04 西元さんの指示: サンスタンパーA型を追加し、両商品とも税抜4,500円(税込4,950円)に統一
+const PRODUCTS = {
+  shiny: {
+    shortName: 'シャイニースタンプ',                                   // メール件名・Slack・Notion案件名・台帳の「商品」列に使う
+    name: 'シャイニースタンプ(プルデンシャル生命保険様)',              // Square決済・Notion「品目」に使う正式な商品名
+    description: 'シャイニースタンプ（住所印／Shiny Printer S-844・22mm×58mm）', // 確認メール本文の商品説明
+    price: 4950
+  },
+  sun: {
+    shortName: 'サンスタンパー',
+    name: 'サンスタンパー(プルデンシャル生命保険様)',
+    description: 'サンスタンパー（住所印／A型・23mm×63mm）',
+    price: 4950
+  }
+};
 const SHIPPING_FEE = 440; // 送料(税込)。税別400円→税込440円で2026-08-27に西元さんの指示で確定
-// Square決済・Notion「品目」に使う正式な商品名(この文字列がそのまま決済画面・Notionに表示される)
-const PRODUCT_NAME = 'シャイニースタンプ(プルデンシャル生命保険様)';
 
 function toHalfWidth(str) {
   if (!str) return "";
@@ -190,6 +202,11 @@ function getOrCreateOrderSheet_(ss) {
   if (!sheet) {
     sheet = ss.insertSheet(ORDER_SHEET_NAME);
     sheet.appendRow(ORDER_SHEET_HEADERS);
+    return sheet;
+  }
+  // 「商品」列を後から追加した(2026-09-04)ため、既存シートのヘッダーが古い場合は1行目を書き直して揃える
+  if (sheet.getLastColumn() < ORDER_SHEET_HEADERS.length) {
+    sheet.getRange(1, 1, 1, ORDER_SHEET_HEADERS.length).setValues([ORDER_SHEET_HEADERS]);
   }
   return sheet;
 }
@@ -247,27 +264,31 @@ function processOrderForm(formData) {
     shipTel = toHalfWidth((formData.shipTel || "").trim());
   }
 
+  // 選択された商品(shiny / sun)。productTypeが送られてこない場合(古いキャッシュの画面など)は
+  // 従来からの単一商品だったシャイニースタンプとして扱う。
+  var product = PRODUCTS[formData.productType] || PRODUCTS.shiny;
+
   var lineItems = [
-    _sqLineItem(PRODUCT_NAME, 1, STAMP_PRICE),
+    _sqLineItem(product.name, 1, product.price),
     _sqLineItem('送料', 1, SHIPPING_FEE)
   ];
-  var total = STAMP_PRICE + SHIPPING_FEE;
+  var total = product.price + SHIPPING_FEE;
 
   sheet.appendRow([
     new Date(), formData.companyName, formData.branchName, formData.userName,
     formData.zipCode, formData.address, formData.tel, formData.fax || "-", formData.mobile || "-", formData.email,
-    shipZip, shipAddress, shipName, shipTel, total
+    shipZip, shipAddress, shipName, shipTel, total, product.shortName
   ]);
 
   var paymentUrl = createSquarePaymentLink(lineItems, formData.userName);
 
   try {
-    recordOrderToNotion_(formData, lineItems, new Date());
+    recordOrderToNotion_(formData, lineItems, new Date(), product);
   } catch (notionErr) {
     console.error('Notion記録でエラー: ' + notionErr.toString());
   }
 
-  sendOrderEmails(formData, total, sameAsAbove, shipZip, shipAddress, shipName, shipTel, paymentUrl);
+  sendOrderEmails(formData, product, total, sameAsAbove, shipZip, shipAddress, shipName, shipTel, paymentUrl);
   return { message: "ご注文を承りました。内容確認のメールをお送りしました。", paymentUrl: paymentUrl };
 
   } catch (e) {
@@ -276,8 +297,8 @@ function processOrderForm(formData) {
   }
 }
 
-function sendOrderEmails(data, total, sameAsAbove, shipZip, shipAddress, shipName, shipTel, paymentUrl) {
-  var subject = "【ご注文受付】シャイニースタンプ - " + data.userName + "様（合計：" + total.toLocaleString() + "円）";
+function sendOrderEmails(data, product, total, sameAsAbove, shipZip, shipAddress, shipName, shipTel, paymentUrl) {
+  var subject = "【ご注文受付】" + product.shortName + " - " + data.userName + "様（合計：" + total.toLocaleString() + "円）";
 
   var engraveDetails = "■スタンプ彫刻内容\n" +
                         "社名：" + data.companyName + "\n" +
@@ -296,8 +317,8 @@ function sendOrderEmails(data, total, sameAsAbove, shipZip, shipAddress, shipNam
                      "電話番号：" + shipTel + "\n\n";
 
   var body = data.userName + " 様\n\nご注文ありがとうございます。\n\n" +
-             "【ご注文商品】シャイニースタンプ（住所印／Shiny Printer S-844・22mm×58mm）\n" +
-             "【合計金額】" + total.toLocaleString() + "円（本体" + STAMP_PRICE.toLocaleString() + "円＋送料" + SHIPPING_FEE.toLocaleString() + "円・税込）\n" +
+             "【ご注文商品】" + product.description + "\n" +
+             "【合計金額】" + total.toLocaleString() + "円（本体" + product.price.toLocaleString() + "円＋送料" + SHIPPING_FEE.toLocaleString() + "円・税込）\n" +
              "【納期】ご注文確認後、7営業日以内に発送\n\n" +
              engraveDetails + shipDetails;
 
@@ -311,9 +332,10 @@ function sendOrderEmails(data, total, sameAsAbove, shipZip, shipAddress, shipNam
 
   // Slack通知（担当者への個人メンション付き）。誰が何を注文したか一目でわかる内容にする。
   var mention = "<@" + SLACK_MEMBER_ID + ">";
-  var slackText = mention + " *【シャイニースタンプの注文が入りました（プルデンシャル生命保険様）】*\n\n" +
+  var slackText = mention + " *【" + product.shortName + "の注文が入りました（プルデンシャル生命保険様）】*\n\n" +
                   "*■基本情報*\n" +
                   "・注文者: " + data.userName + " 様（" + data.companyName + " " + data.branchName + "）\n" +
+                  "・商品: " + product.description + "\n" +
                   "・合計金額: " + total.toLocaleString() + "円 (税込・送料込)\n\n" +
                   "*■彫刻内容*\n" +
                   "社名：" + data.companyName + " / 支店名：" + data.branchName + " / お名前：" + data.userName + "\n" +
