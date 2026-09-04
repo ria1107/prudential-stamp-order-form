@@ -7,7 +7,7 @@
 | 商品キー | 商品 | メーカー・型番 | サイズ |
 |---|---|---|---|
 | `shiny` | シャイニースタンプ | シャイニー製／Shiny Printer S-844 | 22mm×58mm |
-| `sun` | サンスタンパー | サンビー製／A型 | 23mm×63mm |
+| `sun` | サンスタンパー | タイヨートマー製／A型 | 23mm×63mm |
 
 「印鑑販売_行政書士様向け」（GitHub: `ria1107/hanko-order-form`）と同じ仕組み
 （Square決済リンク発行・Notion自動記帳・Slack通知・お客様への自動確認メール）を流用して作った、
@@ -137,7 +137,9 @@ Apps Scriptエディタ → 歯車アイコン「プロジェクトの設定」�
   `npx @google/clasp --user f3 redeploy AKfycbzWxK6u1mJFbm2rW1woVAQEM4qwoZKevD-QROwOY2mmVg3dKxBt7qCy8jXl8vfbhVkl`
   を実行する（デプロイIDを変えずに更新するとURLが変わらない）
 
-商品写真は`assets/shiny_s844.jpg`（シャイニー）と`assets/サンスタンパー-A型-23x63mm.jpg`（サンスタンパー）を
+商品写真は`assets/shiny_s844.jpeg`（シャイニー。2026-09-04に差し替え）・
+`assets/サンスタンパー-A型-23x63mm.jpg`（サンスタンパー）・
+`assets/印面イメージ.jpeg`（印面の見本。商品選択の下の「印面イメージ」セクションに表示）を
 圧縮・base64化して`docs/index.html`に直接埋め込んでいる
 （GitHub Pagesは静的ファイルも配信できるが、既存の実装をそのまま踏襲している。
 差し替える場合は元画像を`assets/`に上書きし、圧縮・埋め込みし直す。
