@@ -115,22 +115,25 @@ function recordOrderToNotion_(formData, lineItems, orderDate, product) {
 // ▼商品設定(価格は税込)。金額・商品を変更する場合はここだけ書き換えればよい。
 // index.html側のJavaScript(PRODUCTS / SHIPPING_FEE)も表示用に同じ値を持っているので、
 // 変更する場合は両方を合わせて変更すること。
-// 2026-09-04 西元さんの指示: サンスタンパーA型を追加し、両商品とも税抜4,500円(税込4,950円)に統一
+// 2026-09-04 西元さんの指示: サンスタンパーA型を追加
+// 2026-09-05 西元さんの指示: 両商品とも「送料込み・税込4,500円」に変更(送料の別建てをやめて価格に含める)
 const PRODUCTS = {
   shiny: {
     shortName: 'シャイニースタンプ',                                   // メール件名・Slack・Notion案件名・台帳の「商品」列に使う
     name: 'シャイニースタンプ(プルデンシャル生命保険様)',              // Square決済・Notion「品目」に使う正式な商品名
     description: 'シャイニースタンプ（住所印／Shiny Printer S-844・22mm×58mm）', // 確認メール本文の商品説明
-    price: 4950
+    price: 4500 // 税込・送料込み
   },
   sun: {
     shortName: 'サンスタンパー',
     name: 'サンスタンパー(プルデンシャル生命保険様)',
     description: 'サンスタンパー（住所印／A型・23mm×63mm）',
-    price: 4950
+    price: 4500 // 税込・送料込み
   }
 };
-const SHIPPING_FEE = 440; // 送料(税込)。税別400円→税込440円で2026-08-27に西元さんの指示で確定
+// 送料は商品価格に含めることになったため0円。復活させる場合はここに税込額を入れれば、
+// Squareの明細・合計・Notion記帳に送料行が自動で戻る。
+const SHIPPING_FEE = 0;
 
 function toHalfWidth(str) {
   if (!str) return "";
@@ -268,10 +271,11 @@ function processOrderForm(formData) {
   // 従来からの単一商品だったシャイニースタンプとして扱う。
   var product = PRODUCTS[formData.productType] || PRODUCTS.shiny;
 
-  var lineItems = [
-    _sqLineItem(product.name, 1, product.price),
-    _sqLineItem('送料', 1, SHIPPING_FEE)
-  ];
+  // 送料が0円(商品価格に込み)の間は、Square明細・Notion記帳に送料行を作らない
+  var lineItems = [_sqLineItem(product.name, 1, product.price)];
+  if (SHIPPING_FEE > 0) {
+    lineItems.push(_sqLineItem('送料', 1, SHIPPING_FEE));
+  }
   var total = product.price + SHIPPING_FEE;
 
   sheet.appendRow([
@@ -318,7 +322,7 @@ function sendOrderEmails(data, product, total, sameAsAbove, shipZip, shipAddress
 
   var body = data.userName + " 様\n\nご注文ありがとうございます。\n\n" +
              "【ご注文商品】" + product.description + "\n" +
-             "【合計金額】" + total.toLocaleString() + "円（本体" + product.price.toLocaleString() + "円＋送料" + SHIPPING_FEE.toLocaleString() + "円・税込）\n" +
+             "【合計金額】" + total.toLocaleString() + "円（税込・送料込み）\n" +
              "【納期】ご注文確認後、7営業日以内に発送\n\n" +
              engraveDetails + shipDetails;
 
