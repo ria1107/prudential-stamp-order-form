@@ -388,6 +388,10 @@ function doGet(e) {
     return ContentService.createTextOutput(JSON.stringify(cleanupBlankNameRows_()))
       .setMimeType(ContentService.MimeType.JSON);
   }
+  if (params.action === 'delete_by_name' && params.name) {
+    return ContentService.createTextOutput(JSON.stringify(deleteRowsByName_(params.name)))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
   return ContentService.createTextOutput(JSON.stringify({ ok: true }))
     .setMimeType(ContentService.MimeType.JSON);
 }
@@ -473,6 +477,22 @@ function cleanupBlankNameRows_() {
   var deleted = [];
   for (var i = rows.length - 1; i >= 1; i--) {
     if (!rows[i][idxName]) {
+      deleted.push(i + 1);
+      sheet.deleteRow(i + 1);
+    }
+  }
+  return { 削除した行: deleted, 残り行数: sheet.getLastRow() - 1 };
+}
+
+// お名前が完全一致する行を削除する(テスト注文の後片付け用)。
+function deleteRowsByName_(name) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = getOrCreateOrderSheet_(ss);
+  var rows = sheet.getDataRange().getValues();
+  var idxName = rows[0].indexOf('お名前');
+  var deleted = [];
+  for (var i = rows.length - 1; i >= 1; i--) {
+    if (rows[i][idxName] === name) {
       deleted.push(i + 1);
       sheet.deleteRow(i + 1);
     }
