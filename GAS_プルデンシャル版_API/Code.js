@@ -355,3 +355,127 @@ function sendOrderEmails(data, product, total, sameAsAbove, shipZip, shipAddress
     payload: JSON.stringify({ text: slackText })
   });
 }
+
+// ===== 注文とSquare決済の照合(2026-09-06追加) =====
+// このフォームは「注文確定」の時点でNotion記帳・メール・Slack通知を行い、Square決済は
+// お客様がリンク先で支払いを完了して初めて成立する。つまり支払いが完了しなくても
+// 注文記録自体は残るため、実際に支払われたかどうかは別途Squareに問い合わせる必要がある。
+//
+// 呼び出し方(社外に公開しないURLなので、初回アクセス時に指定したkeyがそのまま合言葉として
+// スクリプトプロパティ「RECONCILE_KEY」に保存される。以降はそのkeyと一致しないと動かない):
+//   ?action=reconcile&days=7&key=<好きな合言葉>
+function doGet(e) {
+  var params = (e && e.parameter) || {};
+  var storedKey = SCRIPT_PROPS.getProperty('RECONCILE_KEY');
+  if (!storedKey) {
+    if (!params.key) {
+      return ContentService.createTextOutput(JSON.stringify({ error: '初回アクセスにはkeyパラメータが必要です' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    SCRIPT_PROPS.setProperty('RECONCILE_KEY', params.key);
+    storedKey = params.key;
+  }
+  if (params.key !== storedKey) {
+    return ContentService.createTextOutput(JSON.stringify({ error: '合言葉が一致しません' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  if (params.action === 'reconcile') {
+    var days = parseInt(params.days, 10) || 7;
+    return ContentService.createTextOutput(JSON.stringify(reconcilePayments_(days)))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  if (params.action === 'cleanup_blank_rows') {
+    return ContentService.createTextOutput(JSON.stringify(cleanupBlankNameRows_()))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  return ContentService.createTextOutput(JSON.stringify({ ok: true }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// 過去{days}日分の注文台帳の各行と、Squareの注文(Orders Search API)を突き合わせる。
+// 突き合わせキーは「お名前」(Square側はcreateSquarePaymentLinkでreference_idに設定している)と
+// 金額。同姓同名が複数回注文した場合などは自動判定できないため要目視確認としてマークする。
+function reconcilePayments_(days) {
+  if (!SQUARE_ACCESS_TOKEN || !SQUARE_LOCATION_ID) {
+    return { error: 'SQUARE_ACCESS_TOKENまたはSQUARE_LOCATION_IDが未設定です' };
+  }
+  var since = new Date();
+  since.setDate(since.getDate() - days);
+
+  // 1. こちらの注文台帳から対象期間の行を集める
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = getOrCreateOrderSheet_(ss);
+  var rows = sheet.getDataRange().getValues();
+  var header = rows[0];
+  var idxDate = header.indexOf('注文日時');
+  var idxName = header.indexOf('お名前');
+  var idxTotal = header.indexOf('合計金額(税込)');
+  var orders = [];
+  for (var i = 1; i < rows.length; i++) {
+    var row = rows[i];
+    var orderDate = row[idxDate];
+    if (!(orderDate instanceof Date) || orderDate < since) continue;
+    orders.push({ date: orderDate, name: row[idxName], total: row[idxTotal] });
+  }
+
+  // 2. Square側の注文を同期間ぶん取得(Orders Search API)
+  var res = UrlFetchApp.fetch(SQUARE_API_BASE + '/v2/orders/search', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'Authorization': 'Bearer ' + SQUARE_ACCESS_TOKEN, 'Square-Version': '2025-01-23' },
+    payload: JSON.stringify({
+      location_ids: [SQUARE_LOCATION_ID],
+      query: {
+        filter: { date_time_filter: { created_at: { start_at: since.toISOString() } } },
+        sort: { sort_field: 'CREATED_AT', sort_order: 'DESC' }
+      },
+      limit: 100
+    }),
+    muteHttpExceptions: true
+  });
+  var body = JSON.parse(res.getContentText());
+  if (res.getResponseCode() >= 300) {
+    return { error: 'Square Orders Search APIエラー: ' + res.getContentText() };
+  }
+  var squareOrders = body.orders || [];
+
+  // 3. お名前(reference_id)+金額で突き合わせ
+  var results = orders.map(function(order) {
+    var matches = squareOrders.filter(function(so) {
+      return so.reference_id === order.name;
+    });
+    var match = matches.length === 1 ? matches[0] : null;
+    var paid = match && match.tenders && match.tenders.length > 0;
+    return {
+      注文日時: Utilities.formatDate(order.date, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm'),
+      お名前: order.name,
+      注文金額: order.total,
+      Square照合: matches.length === 0 ? '対応する注文が見つからない(期間外の可能性)'
+                : matches.length > 1 ? '同姓同名が複数件あり要目視確認'
+                : paid ? '支払い完了' : '未払い(決済リンク未使用の可能性)',
+      Square状態: match ? match.state : null,
+      Square金額: match && match.total_money ? match.total_money.amount : null
+    };
+  });
+  return {
+    対象期間: days + '日間', 件数: results.length, 結果: results,
+    診断_シート物理行数: rows.length, 診断_ヘッダー: header, 診断_SS_URL: SS_URL
+  };
+}
+
+// お名前が空欄の行を削除する(実際のお客様はフォームの必須入力チェックを通るため、
+// お名前が空になるのは動作確認用の直接APIアクセスなど、注文フォーム経由ではない場合に限られる)。
+function cleanupBlankNameRows_() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = getOrCreateOrderSheet_(ss);
+  var rows = sheet.getDataRange().getValues();
+  var idxName = rows[0].indexOf('お名前');
+  var deleted = [];
+  for (var i = rows.length - 1; i >= 1; i--) {
+    if (!rows[i][idxName]) {
+      deleted.push(i + 1);
+      sheet.deleteRow(i + 1);
+    }
+  }
+  return { 削除した行: deleted, 残り行数: sheet.getLastRow() - 1 };
+}
