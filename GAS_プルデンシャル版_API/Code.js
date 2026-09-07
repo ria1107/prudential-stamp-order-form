@@ -39,6 +39,8 @@ const ORDER_SHEET_HEADERS = [
   '注文日時', '社名', '支店名', 'お名前', '郵便番号', '住所', '電話番号', 'FAX番号', '携帯電話番号', 'メールアドレス',
   '配送先郵便番号', '配送先住所', 'お届け先氏名', '配送先電話番号', '合計金額(税込)', '商品'
 ];
+// ↑「支店名」列は2026-09-07にフォームから項目を削除したが、既存シートの列位置を保つため
+// ヘッダー自体は残す(今後の注文は空欄になる。列を詰めると過去データの列がズレるため)。
 
 // ===== Notion連携(注文後にDB_プロジェクト・DB_現金出納帳_F3へ自動記録) =====
 // データソースIDは印鑑注文フォームと共通(同じNotionワークスペースのDB)。
@@ -306,7 +308,6 @@ function sendOrderEmails(data, product, total, sameAsAbove, shipZip, shipAddress
 
   var engraveDetails = "■スタンプ彫刻内容\n" +
                         "社名：" + data.companyName + "\n" +
-                        "支店名：" + data.branchName + "\n" +
                         "お名前：" + data.userName + "\n" +
                         "郵便番号：" + data.zipCode + "\n" +
                         "住所：" + data.address + "\n" +
@@ -338,11 +339,11 @@ function sendOrderEmails(data, product, total, sameAsAbove, shipZip, shipAddress
   var mention = "<@" + SLACK_MEMBER_ID + ">";
   var slackText = mention + " *【" + product.shortName + "の注文が入りました（プルデンシャル生命保険様）】*\n\n" +
                   "*■基本情報*\n" +
-                  "・注文者: " + data.userName + " 様（" + data.companyName + " " + data.branchName + "）\n" +
+                  "・注文者: " + data.userName + " 様（" + data.companyName + "）\n" +
                   "・商品: " + product.description + "\n" +
                   "・合計金額: " + total.toLocaleString() + "円 (税込・送料込)\n\n" +
                   "*■彫刻内容*\n" +
-                  "社名：" + data.companyName + " / 支店名：" + data.branchName + " / お名前：" + data.userName + "\n" +
+                  "社名：" + data.companyName + " / お名前：" + data.userName + "\n" +
                   "住所：〒" + data.zipCode + " " + data.address + "\n" +
                   "TEL：" + data.tel + (data.fax ? " / FAX：" + data.fax : "") + (data.mobile ? " / 携帯：" + data.mobile : "") + "\n\n" +
                   "*■お届け先*\n" +
