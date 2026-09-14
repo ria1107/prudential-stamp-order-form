@@ -60,6 +60,33 @@ npx wrangler pages deploy docs --project-name=f3-prudential-stamp-order --branch
 2. README.mdの案内URL・Notion「DB_アプリURL台帳」の更新
 3. 問題なければGitHub Pages側の停止(今回は未実施・指示があるまで着手しない)
 
+## 6. 障害発生と調査結果(2026-09-14)
+
+社長より「https://f3-prudential-stamp-order.pages.dev/ が添付画像のようになっている」と報告
+(添付画像は見出し「3. メールアドレス」・クリーム色の装飾フォントデザイン)。
+
+**調査結果**:
+- 本番URL(`https://f3-prudential-stamp-order.pages.dev/`)にアクセスすると、curl・ヘッドレスブラウザ
+  いずれも**Cloudflare自身の「Suspected Phishing(フィッシング詐欺の疑いあり)」警告画面**が
+  100%表示され、フォームに到達できない状態を確認(Turnstile認証を解いて手動で突破する経路はあるが、
+  一般のお客様がそこまでするとは考えにくい)
+- 過去3回分のデプロイ個別URL(`https://<hash>.f3-prudential-stamp-order.pages.dev`)を直接確認したところ、
+  **いずれも正しい「住所印スタンプ ご注文フォーム」の内容**で、「3. メールアドレス」のような見出しは
+  存在しなかった。デプロイされている中身自体に問題はない
+- 添付画像の「3. メールアドレス」という見出しは、同時期に別案件で改修中だった
+  「らくぽん」注文フォーム(`プロジェクト/F3/20260822_ゴルフグッズ通販サイト構築/site/order.html`)の
+  実際の見出しと完全一致した。このCloudflareプロジェクトへの誤デプロイの形跡は無かったため、
+  添付画像は別タブ(らくぽん側)のスクリーンショットが混在した可能性が高いと判断(未確定)
+- **README.mdの「お客様に共有するURL」は今も旧来のGitHub Pages版
+  (`https://ria1107.github.io/prudential-stamp-order-form/`)のまま**で、Cloudflare版への切替は
+  未実施だったと判明。GitHub Pages版は現在も200 OKで正常稼働のため、**実際のお客様への影響は無い**
+- Web検索で確認: `*.pages.dev`共有ドメインはフィッシング業者に悪用されやすく、無関係な正規サイトが
+  誤検知で巻き込まれる事例が多数報告されている既知の問題([Cloudflare Community](https://community.cloudflare.com/t/false-positive-report-for-suspected-phishing/909578)ほか)
+
+**未解決**: フィッシング誤判定の解除には、Cloudflareダッシュボードへのログイン(アカウント所有者)から
+「レビュー申請」を行う必要があり、wrangler CLIからは解除できない。対応方針は社長確認待ち
+(このままGitHub Pages運用を継続する／ダッシュボードから異議申し立てをする／独自ドメインに変更する 等)。
+
 ## 参考
 
 同じ手法での移行実績: `会社基盤/products/印鑑販売_行政書士様向け/Cloudflare移行メモ.md`
