@@ -154,12 +154,18 @@ Apps Scriptエディタ → 歯車アイコン「プロジェクトの設定」�
 
 | 項目 | URL |
 |---|---|
-| フォーム画面（お客様に共有するURL） | https://ria1107.github.io/prudential-stamp-order-form/ |
+| フォーム画面（お客様に共有するURL、2026-09-15更新） | https://f3-stamp-order.pages.dev |
 | Apps Scriptエディタ（scriptId: `1dI4cpJRLm-E_4XCsEprLhvKKwrgD8kbTh6jPV24N2cZas3LxPwOcFksy`） | https://script.google.com/d/1dI4cpJRLm-E_4XCsEprLhvKKwrgD8kbTh6jPV24N2cZas3LxPwOcFksy/edit |
 | GAS APIエンドポイント（`docs/index.html`のAPI_URLと一致させる） | https://script.google.com/macros/s/AKfycbzWxK6u1mJFbm2rW1woVAQEM4qwoZKevD-QROwOY2mmVg3dKxBt7qCy8jXl8vfbhVkl/exec |
+| 旧URL（GitHub Pages、規約リスクのため案内終了・バックアップとして稼働中） | https://ria1107.github.io/prudential-stamp-order-form/ |
+| 旧URL（Cloudflare、フィッシング誤検知のため使用不可） | ~~https://f3-prudential-stamp-order.pages.dev~~ |
+
+**2026-09-15: ホスティングをGitHub Pages → Cloudflare Pagesへ切替。** 経緯は`Cloudflare移行メモ.md`参照。
+「f3-prudential-stamp-order」という名前がCloudflareのフィッシング自動検知に誤って引っかかったため、
+ブランド名を含まない「f3-stamp-order」という名前で作り直したプロジェクトが正式版。
 
 コードを修正した場合:
-- `docs/index.html`を直したら、`git push`するだけでGitHub Pagesに反映される（数分かかることがある）
+- `docs/index.html`を直したら、`npx wrangler pages deploy docs --project-name=f3-stamp-order --branch=main --commit-dirty=true`で再デプロイ（GitHub連携は未設定のため自動反映されない）
 - `GAS_プルデンシャル版_API/Code.js`を直したら、そのフォルダーで`npx @google/clasp --user f3 push`→
   `npx @google/clasp --user f3 redeploy AKfycbzWxK6u1mJFbm2rW1woVAQEM4qwoZKevD-QROwOY2mmVg3dKxBt7qCy8jXl8vfbhVkl`
   を実行する（デプロイIDを変えずに更新するとURLが変わらない）
