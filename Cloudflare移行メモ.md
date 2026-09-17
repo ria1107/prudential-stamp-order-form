@@ -105,6 +105,21 @@ npx wrangler pages deploy docs --project-name=f3-stamp-order --branch=main --com
 - README.mdの「お客様に共有するURL」をこの新URLに更新済み・GitHub Pages版は案内終了(バックアップとして稼働は継続)
 - GAS側(裏側処理)には一切触れていない
 
+## 8. 【2026-09-18追記】旧プロジェクト削除・独自ドメイン追加(D-024関連、開発課依頼)
+
+### 旧`f3-prudential-stamp-order`を削除
+
+2026-09-15付けで既に`f3-stamp-order`へ完全移行・README.mdの案内URLも切替済みであること、
+フィッシング誤検知で403ブロックされたまま放置されていたことを再確認したうえで、
+`wrangler pages project delete f3-prudential-stamp-order`で削除した。
+削除後は`https://f3-prudential-stamp-order.pages.dev/`が530(プロジェクト不存在)を返すことを確認済み。
+
+### `f3-stamp-order`に独自ドメイン`stamp.f-3.jp`を追加
+
+Cloudflare Pages Custom Domains APIで追加(状態: `pending`、CNAME未設定待ち)。
+お名前.com側で`stamp` → CNAME → `f3-stamp-order.pages.dev` の追加が必要
+(手順は`会社基盤/products/印鑑販売_行政書士様向け/Cloudflare移行メモ.md`の【2026-09-18追記】3.を参照、同じ手順で6件まとめて設定する)。
+
 ## 参考
 
-同じ手法での移行実績: `会社基盤/products/印鑑販売_行政書士様向け/Cloudflare移行メモ.md`
+同じ手法での移行実績: `会社基盤/products/印鑑販売_行政書士様向け/Cloudflare移行メモ.md`(2026-09-18追記に今回のAPI操作の詳細・6フォーム分のCNAME一覧あり)
