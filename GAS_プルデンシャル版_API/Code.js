@@ -81,6 +81,9 @@ function recordOrderToNotion_(formData, lineItems, orderDate, product) {
     template: { type: 'default' },
     properties: {
       '案件名': { title: [{ text: { content: projectTitle } }] },
+      // 事業区分: 会社ダッシュボードは「事業区分=F3」の案件だけを数えるため必ず入れる(2026-09-28追加)。
+      // 'F3' はNotion側の既存の選択肢名。別の事業の注文に使い回す場合だけ、ここを書き換える。
+      '事業区分': { select: { name: 'F3' } },
       '開始日': { date: { start: isoDate } },
       '担当者': { people: [{ id: NOTION_STAFF_SUGIKADO_ID }] },
       '進捗状況': { status: { name: '完了(クレジット)' } }
